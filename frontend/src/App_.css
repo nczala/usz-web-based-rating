@@ -1,0 +1,83 @@
+.app-shell {
+  width: min(900px, 100%);
+  margin: 0 auto;
+  padding: 48px 24px;
+  box-sizing: border-box;
+  text-align: left;
+}
+
+.page-header {
+  margin-bottom: 32px;
+}
+
+.eyebrow {
+  margin-bottom: 8px;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.case-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  overflow: hidden;
+}
+
+.status {
+  padding: 24px;
+}
+
+.error {
+  color: var(--danger);
+}
+
+.case-details {
+  margin: 0;
+  padding: 0;
+}
+
+.case-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.case-row:last-child {
+  border-bottom: 0;
+}
+
+.case-id {
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 14px;
+}
+
+.case-name {
+  color: var(--text-h);
+  font-weight: 600;
+  margin: 0;
+}
+
+.dicom-viewer {
+  margin-top: 24px;
+}
+
+.dicom-viewport {
+  width: min(900px, calc(100vw - 48px));
+  height: min(900px, calc(100vw - 48px));
+  min-height: 520px;
+  background: #000;
+  border: 2px solid #b42318;
+  box-sizing: border-box;
+}
+
+.dicom-status {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  font-size: 13px;
+}
