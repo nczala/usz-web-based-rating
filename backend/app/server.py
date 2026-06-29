@@ -360,3 +360,19 @@ def save_rating(user_id: str, order_id: str, payload: dict = Body(...)):
 
     df.to_excel(excel_file, index=False)
 
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+
+frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+if frontend_dist.exists():
+
+    @app.get("/")
+    def serve_frontend():
+        return FileResponse(frontend_dist / "index.html")
+
+    app.mount(
+        "/assets",
+        StaticFiles(directory=frontend_dist / "assets"),
+        name="assets",
+    )

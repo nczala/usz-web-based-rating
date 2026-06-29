@@ -21,4 +21,4 @@ dist/
 *.egg-info/
 
 # Data
-/data
+/data/cases/case_1
