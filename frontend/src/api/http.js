@@ -17,15 +17,27 @@ export async function request(path, options = {}) {
     headers,
   })
 
+  const contentType = response.headers.get('content-type') ?? ''
+
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`)
+    let message = `Request failed with status ${response.status}`
+
+    if (contentType.includes('application/json')) {
+      const payload = await response.json()
+      message = payload?.detail ?? message
+    } else {
+      const text = await response.text()
+      if (text) {
+        message = text
+      }
+    }
+
+    throw new Error(message)
   }
 
   if (response.status === 204) {
     return null
   }
-
-  const contentType = response.headers.get('content-type') ?? ''
 
   if (contentType.includes('application/json')) {
     return response.json()

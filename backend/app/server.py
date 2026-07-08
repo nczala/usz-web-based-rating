@@ -1,4 +1,6 @@
 from pathlib import Path
+import re
+import shutil
 import numpy as np
 import pandas as pd
 import pydicom
@@ -132,37 +134,37 @@ def load_case_from_id(case_id):
 
 
 def get_case_series_folder(case_id, series_name: str) -> Path:
-
-    def parse_number(s):
-        n = float(s)
-        return int(n) if n.is_integer() else n
-
-    case = load_case_from_id(case_id)
-
-    patient_id = str(case["patient_id"]).strip()
-    field_strength = parse_number(str(case["field_strength"]).strip())
-
-    print(patient_id, field_strength)
-
     series_dir_map = {
-        "axial": "tra",
+        "axial": "tra_cropped",
         "sagittal": "sag",
     }
 
     if series_name not in series_dir_map:
         raise HTTPException(status_code=404, detail=f"Unknown series: {series_name}")
 
-    folder = (
-        settings.dicom_web_viewer_root
-        / patient_id
-        / f"{field_strength}T"
-        / series_dir_map[series_name]
-    ).resolve()
+    normalized_case_id = str(case_id).strip()
+    series_dir = series_dir_map[series_name]
+    candidate_roots = [
+        settings.cases_root / f"case_{normalized_case_id}",
+        settings.cases_root / normalized_case_id,
+        settings.dicom_web_viewer_root / f"case_{normalized_case_id}",
+        settings.dicom_web_viewer_root / normalized_case_id,
+    ]
 
-    if not folder.exists():
+    folder = None
+    for root in candidate_roots:
+        candidate = (root / series_dir).resolve()
+        if candidate.exists():
+            folder = candidate
+            break
+
+    if folder is None:
         raise HTTPException(
             status_code=404,
-            detail=f"Series folder not found for case {case_id}: {folder}",
+            detail=(
+                f"Series folder not found for case {case_id}. "
+                f"Checked case-based folders for '{series_dir}'."
+            ),
         )
 
     return folder
@@ -219,18 +221,308 @@ def load_user_info(user_id):
     return user.iloc[0].to_dict()
 
 
+def normalize_user_name(value):
+    return re.sub(r"\s+", " ", str(value or "").strip())
+
+
+def build_user_slug(name: str, user_id: str, duplicate_count: int) -> str:
+    normalized_name = normalize_user_name(name).lower()
+    base_slug = re.sub(r"[^a-z0-9]+", "-", normalized_name).strip("-")
+
+    if not base_slug:
+        base_slug = f"user-{user_id}"
+
+    if duplicate_count > 1:
+        return f"{base_slug}-{user_id}"
+
+    return base_slug
+
+
+def load_users_dataframe():
+    df = pd.read_excel(settings.users_excel_path, sheet_name=0)
+
+    if "user_id" not in df.columns:
+        raise HTTPException(status_code=500, detail="users.xlsx is missing the 'user_id' column")
+
+    if "name" not in df.columns:
+        raise HTTPException(status_code=500, detail="users.xlsx is missing the 'name' column")
+
+    df = df.dropna(subset=["user_id", "name"]).copy()
+    df["user_id"] = df["user_id"].astype(str).str.strip()
+    df["name"] = df["name"].map(normalize_user_name)
+
+    return df.loc[(df["user_id"] != "") & (df["name"] != "")]
+
+
+def serialize_users(df: pd.DataFrame):
+    normalized_names = df["name"].fillna("").map(normalize_user_name)
+    name_counts = normalized_names.value_counts().to_dict()
+
+    users = []
+    for _, row in df.iterrows():
+        user_id = str(row["user_id"]).strip()
+        name = normalize_user_name(row.get("name"))
+        group = str(row.get("group", "")).strip()
+        slug = build_user_slug(name, user_id, name_counts.get(name, 0))
+        solved_cases, total_cases = get_user_progress(user_id, group)
+
+        users.append(
+            {
+                "user_id": user_id,
+                "name": name,
+                "group": group,
+                "slug": slug,
+                "solved_cases": solved_cases,
+                "total_cases": total_cases,
+            }
+        )
+
+    return users
+
+
+def serialize_user_row(row: pd.Series, duplicate_count: int):
+    user_id = str(row["user_id"]).strip()
+    name = normalize_user_name(row.get("name"))
+    group = str(row.get("group", "")).strip()
+    slug = build_user_slug(name, user_id, duplicate_count)
+
+    return {
+        "user_id": user_id,
+        "name": name,
+        "group": group,
+        "slug": slug,
+    }
+
+
+def get_next_user_id(df: pd.DataFrame) -> str:
+    numeric_ids = pd.to_numeric(df["user_id"], errors="coerce").dropna()
+
+    if numeric_ids.empty:
+        return "1"
+
+    return str(int(numeric_ids.max()) + 1)
+
+
+def load_all_case_ids() -> list[int]:
+    df = pd.read_excel(settings.cases_excel_path, sheet_name=0)
+
+    if "case_id" not in df.columns:
+        raise HTTPException(
+            status_code=500,
+            detail="all_cases.xlsx is missing the 'case_id' column",
+        )
+
+    case_ids = pd.to_numeric(df["case_id"], errors="coerce").dropna().astype(int).tolist()
+
+    if not case_ids:
+        raise HTTPException(status_code=500, detail="No cases found in all_cases.xlsx")
+
+    return case_ids
+
+
+def load_question_groups() -> list[str]:
+    df = pd.read_excel(settings.questions_excel_path, sheet_name=0)
+
+    if "group" not in df.columns:
+        raise HTTPException(
+            status_code=500,
+            detail="questions.xlsx is missing the 'group' column",
+        )
+
+    groups = (
+        df["group"]
+        .dropna()
+        .astype(str)
+        .str.strip()
+    )
+    groups = sorted({group for group in groups.tolist() if group})
+
+    if not groups:
+        raise HTTPException(status_code=500, detail="No groups found in questions.xlsx")
+
+    return groups
+
+
+def create_randomized_order_file(path: Path):
+    case_ids = load_all_case_ids()
+    shuffled_case_ids = np.random.default_rng().permutation(case_ids).tolist()
+    order_df = pd.DataFrame(
+        {
+            "order": range(1, len(shuffled_case_ids) + 1),
+            "case_id": shuffled_case_ids,
+        }
+    )
+    order_df.to_excel(path, index=False)
+
+
+def create_empty_rating_file(path: Path):
+    pd.DataFrame(columns=["order_id", "case_id"]).to_excel(path, index=False)
+
+
+def create_user_record(name: str, group: str):
+    normalized_name = normalize_user_name(name)
+    normalized_group = str(group or "").strip()
+
+    if not normalized_name:
+        raise HTTPException(status_code=400, detail="User name is required")
+
+    if not normalized_group:
+        raise HTTPException(status_code=400, detail="User group is required")
+
+    if normalized_group not in load_question_groups():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown group '{normalized_group}'",
+        )
+
+    users_df = pd.read_excel(settings.users_excel_path, sheet_name=0)
+
+    for required_column in ("user_id", "group", "name"):
+        if required_column not in users_df.columns:
+            raise HTTPException(
+                status_code=500,
+                detail=f"users.xlsx is missing the '{required_column}' column",
+            )
+
+    normalized_ids_df = users_df.dropna(subset=["user_id"]).copy()
+    normalized_ids_df["user_id"] = normalized_ids_df["user_id"].astype(str).str.strip()
+    user_id = get_next_user_id(normalized_ids_df)
+
+    user_dir = settings.user_dir(normalized_group, user_id)
+    order_path = settings.user_order_path(normalized_group, user_id)
+    rating_path = settings.user_rating_path(normalized_group, user_id)
+
+    if user_dir.exists():
+        raise HTTPException(
+            status_code=409,
+            detail=f"User directory already exists for user {user_id}",
+        )
+
+    user_dir.mkdir(parents=True, exist_ok=False)
+
+    try:
+        create_randomized_order_file(order_path)
+        create_empty_rating_file(rating_path)
+
+        new_row = {column: None for column in users_df.columns}
+        new_row["user_id"] = user_id
+        new_row["group"] = normalized_group
+        new_row["name"] = normalized_name
+
+        users_df = pd.concat([users_df, pd.DataFrame([new_row])], ignore_index=True)
+        users_df.to_excel(settings.users_excel_path, index=False)
+    except Exception:
+        shutil.rmtree(user_dir, ignore_errors=True)
+        raise
+
+    duplicate_count = (
+        users_df["name"]
+        .fillna("")
+        .map(normalize_user_name)
+        .value_counts()
+        .get(normalized_name, 1)
+    )
+
+    return serialize_user_row(users_df.iloc[-1], duplicate_count)
+
+
+def delete_user_record(user_id: str):
+    user_info = load_user_info(user_id)
+    user_group = str(user_info["group"]).strip()
+    user_dir = settings.user_dir(user_group, str(user_id).strip())
+
+    users_df = pd.read_excel(settings.users_excel_path, sheet_name=0)
+
+    if "user_id" not in users_df.columns:
+        raise HTTPException(
+            status_code=500,
+            detail="users.xlsx is missing the 'user_id' column",
+        )
+
+    normalized_user_id = str(user_id).strip()
+    normalized_ids = users_df["user_id"].astype(str).str.strip()
+    remaining_users_df = users_df.loc[normalized_ids != normalized_user_id].copy()
+
+    if len(remaining_users_df.index) == len(users_df.index):
+        raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+
+    users_df_backup = users_df.copy()
+
+    try:
+        remaining_users_df.to_excel(settings.users_excel_path, index=False)
+
+        if user_dir.exists():
+            shutil.rmtree(user_dir)
+    except Exception:
+        users_df_backup.to_excel(settings.users_excel_path, index=False)
+        raise
+
+
+def resolve_user_by_slug_or_name(username: str):
+    requested = normalize_user_name(username)
+    requested_lower = requested.lower()
+    users = serialize_users(load_users_dataframe())
+
+    for user in users:
+        if user["slug"].lower() == requested_lower:
+            return user
+
+    exact_name_matches = [
+        user for user in users if normalize_user_name(user["name"]).lower() == requested_lower
+    ]
+
+    if len(exact_name_matches) == 1:
+        return exact_name_matches[0]
+
+    if len(exact_name_matches) > 1:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Username '{username}' is ambiguous. "
+                "Use the slug returned by /users instead."
+            ),
+        )
+
+    raise HTTPException(status_code=404, detail=f"Username '{username}' not found")
+
+
 def load_user_order(user_id, user_group):
     df = pd.read_excel(settings.user_order_path(user_group, user_id), sheet_name=0)
 
     return df
 
 
+def get_user_progress(user_id: str, user_group: str) -> tuple[int, int]:
+    try:
+        user_order = load_user_order(user_id, user_group)
+        total_cases = len(user_order.index)
+    except Exception:
+        return 0, 0
+
+    try:
+        user_ratings = pd.read_excel(
+            settings.user_rating_path(user_group, user_id),
+            sheet_name=0,
+        )
+    except Exception:
+        return 0, int(total_cases)
+
+    if "order_id" not in user_ratings.columns or user_ratings.empty:
+        return 0, int(total_cases)
+
+    solved_cases = int(user_ratings["order_id"].dropna().astype(str).str.strip().ne("").sum())
+    return solved_cases, int(total_cases)
+
+
 def load_highest_rated_order_id(user_id, user_group):
     df = pd.read_excel(settings.user_rating_path(user_group, user_id), sheet_name=0)
 
-    highest_order_id = df['order_id'].max()
+    if "order_id" not in df.columns or df.empty:
+        return 0
 
-    if not highest_order_id:
+    highest_order_id = df["order_id"].dropna().max()
+
+    if pd.isna(highest_order_id) or not highest_order_id:
         return 0
 
     return highest_order_id
@@ -250,8 +542,19 @@ def get_user_state(user_id: str):
     # Load user rating -> handle if no rating exists yet
     last_user_rating_order_id = load_highest_rated_order_id(user_id, user_group)
 
-    # Get case ID from order id
-    last_user_rating_case_id = user_order.loc[user_order["order"] == last_user_rating_order_id, "case_id"].iloc[0]
+    if last_user_rating_order_id:
+        matching_case_rows = user_order.loc[
+            user_order["order"] == last_user_rating_order_id, "case_id"
+        ]
+        if matching_case_rows.empty:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Order {last_user_rating_order_id} is missing for user {user_id}",
+            )
+        last_user_rating_case_id = matching_case_rows.iloc[0]
+    else:
+        last_user_rating_order_id = int(user_order["order"].iloc[0])
+        last_user_rating_case_id = user_order["case_id"].iloc[0]
 
     # return order_id, case_id, group -> load DICOM of case_id in frontend, visualize case (order_id) top right
 
@@ -262,8 +565,43 @@ def get_user_state(user_id: str):
         "user_group": user_group,
         "last_order_id": int(last_user_rating_order_id),
         "last_case_id": int(last_user_rating_case_id),
-        "number_of_cases": int(number_of_cases)
+        "number_of_cases": int(number_of_cases),
+        "user_order": (
+            user_order[["order", "case_id"]]
+            .replace({np.nan: None})
+            .to_dict(orient="records")
+        ),
     }
+
+
+@app.get("/users")
+def list_users():
+    users = serialize_users(load_users_dataframe())
+    return users
+
+
+@app.get("/user-groups")
+def list_user_groups():
+    return load_question_groups()
+
+
+@app.post("/users")
+def create_user(payload: dict = Body(...)):
+    return create_user_record(
+        name=payload.get("name"),
+        group=payload.get("group"),
+    )
+
+
+@app.delete("/users/{user_id}")
+def delete_user(user_id: str):
+    delete_user_record(user_id)
+    return {"deleted": True, "user_id": str(user_id).strip()}
+
+
+@app.get("/users/by-name/{username}")
+def get_user_by_name(username: str):
+    return resolve_user_by_slug_or_name(username)
 
 def load_questions_by_group(group: str):
     df = pd.read_excel(settings.questions_excel_path, sheet_name=0)
@@ -287,19 +625,31 @@ def get_questions(user_id: str):
 @app.get("/ratings/{user_id}/{order_id}")
 def get_rating(user_id: str, order_id: str):
     user_ratings = load_user_ratings(user_id)
+    user_group = load_user_info(user_id)["group"]
+    user_order = load_user_order(user_id, user_group)
 
     if "order_id" in user_ratings.columns:
         user_ratings["order_id"] = user_ratings["order_id"].astype(str)
 
+    if "order" in user_order.columns:
+        user_order["order"] = user_order["order"].astype(str)
+
     mask = user_ratings["order_id"] == str(order_id)
-    print(mask)
 
     if not mask.any():
+        order_match = user_order.loc[user_order["order"] == str(order_id), "case_id"]
+
+        if order_match.empty:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Order {order_id} is missing for user {user_id}",
+            )
+
         return {
             "order_id": order_id,
-            "case_id": 2,
+            "case_id": int(order_match.iloc[0]),
             "answers": {},
-    }
+        }
 
     row = user_ratings.loc[mask].iloc[0].replace({np.nan: None}).to_dict()
 
@@ -315,7 +665,8 @@ def get_rating(user_id: str, order_id: str):
 
 
 def load_user_ratings(user_id):
-        df = pd.read_excel(settings.user_rating_path("radiology", user_id), sheet_name=0)
+        user_group = load_user_info(user_id)["group"]
+        df = pd.read_excel(settings.user_rating_path(user_group, user_id), sheet_name=0)
         return df
 
 @app.post("/ratings/{user_id}/{order_id}")
@@ -331,7 +682,8 @@ def save_rating(user_id: str, order_id: str, payload: dict = Body(...)):
         new_record[question] = payload["answers"][question]
 
     # Load current rating excel
-    excel_file = settings.user_rating_path("radiology", user_id)
+    user_group = load_user_info(user_id)["group"]
+    excel_file = settings.user_rating_path(user_group, user_id)
 
     df = pd.read_excel(excel_file)
 
@@ -376,3 +728,12 @@ if frontend_dist.exists():
         StaticFiles(directory=frontend_dist / "assets"),
         name="assets",
     )
+
+    @app.get("/{full_path:path}")
+    def serve_frontend_path(full_path: str):
+        requested_file = (frontend_dist / full_path).resolve()
+
+        if requested_file.is_file() and frontend_dist in requested_file.parents:
+            return FileResponse(requested_file)
+
+        return FileResponse(frontend_dist / "index.html")

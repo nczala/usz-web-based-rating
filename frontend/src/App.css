@@ -18,6 +18,266 @@ body,
         linear-gradient(180deg, #13171c 0%, #0b0e12 100%);
 }
 
+.landing-app {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+}
+
+.landing-shell {
+    width: min(980px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.landing-header {
+    padding: 28px;
+    border: 1px solid #23303b;
+    border-radius: 28px;
+    background:
+        radial-gradient(circle at top right, rgba(123, 181, 214, 0.14), transparent 30%),
+        linear-gradient(180deg, rgba(18, 24, 30, 0.96), rgba(8, 11, 15, 0.96));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        0 24px 40px rgba(0, 0, 0, 0.22);
+}
+
+.landing-header h1 {
+    margin: 0;
+    font-size: clamp(2.2rem, 4vw, 4rem);
+    letter-spacing: 0.04em;
+}
+
+.landing-copy {
+    max-width: 42rem;
+    margin: 12px 0 0;
+    color: #a9c0cf;
+    line-height: 1.6;
+}
+
+.landing-state-card {
+    padding: 18px 20px;
+    border: 1px solid #27313b;
+    border-radius: 18px;
+    background: rgba(13, 17, 21, 0.92);
+    color: #d4dde4;
+}
+
+.landing-state-card h2,
+.landing-state-card p {
+    margin: 0;
+}
+
+.landing-state-card h2 {
+    margin-bottom: 8px;
+}
+
+.landing-state-card-error {
+    border-color: #6a3434;
+    background: linear-gradient(180deg, rgba(61, 24, 24, 0.9), rgba(26, 10, 10, 0.9));
+}
+
+.landing-create-card {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 24px 28px;
+    border: 1px solid #23303b;
+    border-radius: 28px;
+    background:
+        radial-gradient(circle at top left, rgba(123, 181, 214, 0.12), transparent 32%),
+        linear-gradient(180deg, rgba(18, 24, 30, 0.96), rgba(8, 11, 15, 0.96));
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.04),
+        0 24px 40px rgba(0, 0, 0, 0.22);
+}
+
+.landing-create-card h2 {
+    margin: 0;
+    font-size: 1.4rem;
+}
+
+.landing-form-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(220px, 1fr);
+    gap: 14px;
+}
+
+.landing-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    color: #d4dde4;
+    font-size: 0.92rem;
+}
+
+.landing-field span {
+    color: #aac0ce;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.landing-field input,
+.landing-field select {
+    min-height: 46px;
+    padding: 0 14px;
+    border: 1px solid #334554;
+    border-radius: 14px;
+    background: rgba(11, 16, 21, 0.9);
+    color: #eef7fd;
+    font: inherit;
+}
+
+.landing-field input::placeholder {
+    color: #6f8797;
+}
+
+.landing-field input:focus,
+.landing-field select:focus {
+    outline: 2px solid rgba(121, 184, 220, 0.45);
+    outline-offset: 2px;
+}
+
+.landing-form-actions {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.create-user-button {
+    padding: 11px 18px;
+    border: 1px solid #43647c;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #7cb5d6 0%, #4f87a8 100%);
+    color: #071019;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.create-user-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.create-user-button:not(:disabled):hover {
+    filter: brightness(1.05);
+}
+
+.user-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+}
+
+.user-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 20px;
+    border: 1px solid #2a3945;
+    border-radius: 22px;
+    background:
+        linear-gradient(180deg, rgba(23, 31, 38, 0.96), rgba(10, 14, 18, 0.96));
+    color: #e8f3fa;
+    transition:
+        transform 120ms ease,
+        border-color 120ms ease,
+        background 120ms ease;
+}
+
+.user-card:hover {
+    transform: translateY(-2px);
+    border-color: #6b97b2;
+    background:
+        linear-gradient(180deg, rgba(31, 42, 51, 0.98), rgba(12, 18, 23, 0.98));
+}
+
+.user-card-open {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    border: 0;
+    padding: 0;
+    padding-right: 28px;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+}
+
+.user-card-name {
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+.user-card-meta {
+    color: #aac0ce;
+    font-size: 0.93rem;
+}
+
+.user-card-progress {
+    color: #d5e7f1;
+    font-size: 0.9rem;
+}
+
+.user-card-path {
+    color: #79b8dc;
+    font-size: 0.88rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.delete-user-button {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgba(122, 139, 150, 0.22);
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.02);
+    color: #8ea2af;
+    font: inherit;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.delete-user-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+.delete-user-button:not(:disabled):hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(143, 199, 232, 0.28);
+    color: #c7d7e0;
+}
+
+.landing-back-link {
+    align-self: flex-start;
+    padding: 10px 0;
+    border: 0;
+    background: transparent;
+    color: #8fc7e8;
+    font: inherit;
+    cursor: pointer;
+}
+
+@media (max-width: 720px) {
+    .landing-form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
 .eyebrow {
     margin: 0 0 6px;
     color: #7ea5bf;
@@ -32,6 +292,7 @@ body,
     align-items: center;
     justify-content: space-between;
     gap: 16px;
+    flex-wrap: wrap;
     margin-bottom: 18px;
 }
 
@@ -41,10 +302,15 @@ body,
     letter-spacing: 0.04em;
 }
 
+.app-title {
+    margin-right: auto;
+}
+
 .header-actions {
     display: flex;
     align-items: center;
     gap: 12px;
+    margin-left: auto;
 }
 
 .session-chip {
@@ -55,6 +321,34 @@ body,
     color: #d6e7f2;
     font-size: 13px;
     letter-spacing: 0.04em;
+}
+
+.session-chip-button {
+    font: inherit;
+    cursor: pointer;
+}
+
+.hospital-logo {
+    display: inline-flex;
+    align-items: center;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    color: #eef7fd;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+}
+
+.hospital-logo-image {
+    display: block;
+    height: 42px;
+    width: auto;
+    border-radius: 6px;
+}
+
+.hospital-logo:hover .hospital-logo-image {
+    filter: brightness(1.04);
 }
 
 .reset-button {
@@ -119,6 +413,17 @@ body,
     color: #eef7fd;
     font-size: 14px;
     line-height: 1.45;
+}
+
+.controls-card {
+    position: relative;
+    padding-right: 168px;
+}
+
+.controls-reset-button {
+    position: absolute;
+    top: 14px;
+    right: 16px;
 }
 
 .case-navigation-row {
@@ -364,6 +669,21 @@ body,
     color: #8ea0ae;
     cursor: not-allowed;
     opacity: 0.72;
+}
+
+@media (max-width: 900px) {
+    .app-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .header-actions {
+        flex-wrap: wrap;
+    }
+
+    .info-strip {
+        grid-template-columns: 1fr;
+    }
 }
 
 .question-card {

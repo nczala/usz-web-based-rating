@@ -40,13 +40,30 @@ function releasePanelVolumes(panels) {
             continue;
         }
 
-        cache.getVolume(panel.volumeId)?.decache?.(true);
-        cache.removeVolumeLoadObject(panel.volumeId);
+        try {
+            cache.getVolume(panel.volumeId)?.decache?.(true);
+        } catch (error) {
+            console.warn(`Failed to decache volume ${panel.volumeId}.`, error);
+        }
+
+        try {
+            cache.removeVolumeLoadObject(panel.volumeId);
+        } catch (error) {
+            console.warn(`Failed to remove volume load object ${panel.volumeId}.`, error);
+        }
     }
 }
 
-function getCaseVolumeId(baseVolumeId, caseId, loadId) {
-    return `${baseVolumeId}:case-${caseId}:load-${loadId}`;
+function purgeCornerstoneCache(panels = {}, { full = false } = {}) {
+    releasePanelVolumes(panels);
+
+    if (full) {
+        try {
+            cache.purgeCache();
+        } catch (error) {
+            console.warn("Failed to purge Cornerstone cache.", error);
+        }
+    }
 }
 
 function getMiddleIndex(length) {
@@ -103,6 +120,10 @@ async function configureViewport(panel, sliceIndex = panel.initialSliceIndex) {
     });
 
     panel.viewport.render();
+}
+
+function getCaseVolumeId(baseVolumeId, caseId, loadId) {
+    return `${baseVolumeId}:case-${caseId}:load-${loadId}`;
 }
 
 export function useDualSequenceViewer(panelConfigs, caseId) {
@@ -220,7 +241,7 @@ export function useDualSequenceViewer(panelConfigs, caseId) {
                 destroyToolGroup();
                 renderingEngineRef.current?.destroy?.();
                 renderingEngineRef.current = null;
-                releasePanelVolumes(runtimePanelsRef.current);
+                purgeCornerstoneCache(runtimePanelsRef.current, { full: true });
                 runtimePanelsRef.current = {};
                 resetViewersRef.current = async () => {};
                 setPanelStatuses(createPanelStatuses(panelConfigs, false));
@@ -233,10 +254,9 @@ export function useDualSequenceViewer(panelConfigs, caseId) {
                 destroyToolGroup();
                 renderingEngineRef.current?.destroy?.();
                 renderingEngineRef.current = null;
-                releasePanelVolumes(runtimePanelsRef.current);
+                purgeCornerstoneCache(runtimePanelsRef.current);
                 runtimePanelsRef.current = {};
                 resetViewersRef.current = async () => {};
-
                 await initializeCornerstoneViewer();
 
                 const loadedPanels = await Promise.all(
@@ -283,18 +303,23 @@ export function useDualSequenceViewer(panelConfigs, caseId) {
                     }))
                 );
 
-                for (const panel of loadedPanels) {
-                    const volume = await volumeLoader.createAndCacheVolume(panel.volumeId, {
-                        imageIds: panel.imageIds,
-                    });
+                const panelVolumes = await Promise.all(
+                    loadedPanels.map(async (panel) => {
+                        const volume = await volumeLoader.createAndCacheVolume(panel.volumeId, {
+                            imageIds: panel.imageIds,
+                        });
+                        await volume.load();
 
-                    await volume.load();
+                        return panel;
+                    })
+                );
 
-                    if (loadId !== loadIdRef.current) {
-                        renderingEngine.destroy?.();
-                        return;
-                    }
+                if (loadId !== loadIdRef.current) {
+                    renderingEngine.destroy?.();
+                    return;
+                }
 
+                for (const panel of panelVolumes) {
                     await setVolumesForViewports(
                         renderingEngine,
                         [{ volumeId: panel.volumeId }],
@@ -302,11 +327,6 @@ export function useDualSequenceViewer(panelConfigs, caseId) {
                     );
 
                     panel.viewport = renderingEngine.getViewport(panel.viewportId);
-                }
-
-                if (loadId !== loadIdRef.current) {
-                    renderingEngine.destroy?.();
-                    return;
                 }
 
                 runtimePanelsRef.current = Object.fromEntries(
@@ -458,7 +478,7 @@ export function useDualSequenceViewer(panelConfigs, caseId) {
 
             renderingEngineRef.current?.destroy?.();
             renderingEngineRef.current = null;
-            releasePanelVolumes(runtimePanelsRef.current);
+            purgeCornerstoneCache(runtimePanelsRef.current);
             runtimePanelsRef.current = {};
             resetViewersRef.current = async () => {};
         };
