@@ -789,6 +789,21 @@ body,
     min-width: 0;
 }
 
+.viewer-panel.is-expanded {
+    position: fixed;
+    inset: 16px;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    padding: 18px;
+    border: 1px solid #26323d;
+    border-radius: 24px;
+    background: linear-gradient(180deg, rgba(18, 24, 30, 0.98), rgba(8, 11, 15, 0.98));
+    box-shadow:
+        0 24px 60px rgba(0, 0, 0, 0.45),
+        0 0 0 9999px rgba(5, 8, 12, 0.76);
+}
+
 .panel-header {
     display: flex;
     align-items: center;
@@ -800,6 +815,14 @@ body,
 
 .viewer-panel h2 {
     margin: 0;
+}
+
+.panel-header-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 .orientation-control {
@@ -820,11 +843,43 @@ body,
     font: inherit;
 }
 
+.expand-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid #43647c;
+    border-radius: 999px;
+    background: linear-gradient(180deg, #7cb5d6 0%, #4f87a8 100%);
+    color: #071019;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.expand-button:hover {
+    filter: brightness(1.05);
+}
+
+.expand-button.is-active {
+    border-color: #3e505d;
+    background: rgba(12, 18, 23, 0.92);
+    color: #e5eef5;
+}
+
+.expand-button-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
 .viewport-wrapper {
     position: relative;
     width: min(800px, 100%);
     height: 420px;
     overflow: hidden;
+    cursor: zoom-in;
 }
 
 .viewport {
@@ -833,6 +888,23 @@ body,
     background: black;
     border: 1px solid #444;
     box-sizing: border-box;
+}
+
+.viewer-panel.is-expanded .panel-header,
+.viewer-panel.is-expanded .viewport-wrapper,
+.viewer-panel.is-expanded .slice-control {
+    width: 100%;
+}
+
+.viewer-panel.is-expanded .viewport-wrapper {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    cursor: zoom-out;
+}
+
+.viewer-panel.is-expanded .viewport {
+    height: 100%;
 }
 
 .viewport-overlay {
@@ -970,6 +1042,11 @@ body,
         flex-direction: column;
     }
 
+    .panel-header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
     .viewer-column {
         flex-direction: column;
         overflow-x: visible;
@@ -988,5 +1065,10 @@ body,
     .answer-list {
         flex-wrap: wrap;
         overflow-x: visible;
+    }
+
+    .viewer-panel.is-expanded {
+        inset: 8px;
+        padding: 14px;
     }
 }

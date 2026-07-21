@@ -639,6 +639,7 @@ function UserRoute({ username }) {
 
 function ViewerApp({ resolvedUser }) {
     const userId = String(resolvedUser.user_id);
+    const [expandedPanelKey, setExpandedPanelKey] = useState(null);
     const [userState, setUserState] = useState(null);
     const [orderEntries, setOrderEntries] = useState([]);
     const [questions, setQuestions] = useState([]);
@@ -731,6 +732,24 @@ function ViewerApp({ resolvedUser }) {
             isCancelled = true;
         };
     }, [userId]);
+
+    useEffect(() => {
+        if (expandedPanelKey == null) {
+            return undefined;
+        }
+
+        function handleKeyDown(event) {
+            if (event.key === "Escape") {
+                setExpandedPanelKey(null);
+            }
+        }
+
+        window.addEventListener("keydown", handleKeyDown);
+
+        return () => {
+            window.removeEventListener("keydown", handleKeyDown);
+        };
+    }, [expandedPanelKey]);
 
     const { panels, handleReset } = useDualSequenceViewer(panelConfigs, currentCaseId);
     const answeredCount = useMemo(
@@ -919,7 +938,7 @@ function ViewerApp({ resolvedUser }) {
                             <span className="info-label">Controls</span>
                             <strong>
                                 Wheel scroll, left drag window, right drag zoom, middle
-                                drag pan
+                                drag pan, double-click expand
                             </strong>
                         </div>
                     </div>
@@ -939,6 +958,12 @@ function ViewerApp({ resolvedUser }) {
                                 loadError={panel.loadError}
                                 onSliderInput={panel.onSliderInput}
                                 onOrientationChange={panel.onOrientationChange}
+                                isExpanded={expandedPanelKey === panel.key}
+                                onToggleExpand={() =>
+                                    setExpandedPanelKey((currentKey) =>
+                                        currentKey === panel.key ? null : panel.key
+                                    )
+                                }
                             />
                         ))}
                     </div>

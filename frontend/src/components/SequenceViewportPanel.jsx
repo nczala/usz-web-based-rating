@@ -10,29 +10,49 @@ export function SequenceViewportPanel({
     loadError,
     onSliderInput,
     onOrientationChange,
+    isExpanded,
+    onToggleExpand,
 }) {
     return (
-        <div className="viewer-panel">
+        <div className={`viewer-panel${isExpanded ? " is-expanded" : ""}`}>
             <div className="panel-header">
                 <h2>{title}</h2>
-                <label className="orientation-control">
-                    <span>View</span>
-                    <select
-                        ref={orientationRef}
-                        className="orientation-select"
-                        defaultValue={defaultOrientation}
-                        onChange={(e) => onOrientationChange(e.target.value)}
+                <div className="panel-header-actions">
+                    <label className="orientation-control">
+                        <span>View</span>
+                        <select
+                            ref={orientationRef}
+                            className="orientation-select"
+                            defaultValue={defaultOrientation}
+                            onChange={(e) => onOrientationChange(e.target.value)}
+                        >
+                            {orientationOptions.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                    {option.label}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <button
+                        className={`expand-button${isExpanded ? " is-active" : ""}`}
+                        type="button"
+                        onClick={onToggleExpand}
+                        aria-pressed={isExpanded}
+                        aria-label={isExpanded ? `Close enlarged ${title}` : `Enlarge ${title}`}
+                        title={isExpanded ? "Close enlarged view" : "Enlarge view"}
                     >
-                        {orientationOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                                {option.label}
-                            </option>
-                        ))}
-                    </select>
-                </label>
+                        <span className="expand-button-icon" aria-hidden="true">
+                            {isExpanded ? "×" : "⤢"}
+                        </span>
+                    </button>
+                </div>
             </div>
 
-            <div className="viewport-wrapper">
+            <div
+                className="viewport-wrapper"
+                onDoubleClick={onToggleExpand}
+                title="Double-click to expand"
+            >
                 <div
                     ref={viewportRef}
                     className="viewport"
