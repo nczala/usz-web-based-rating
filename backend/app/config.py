@@ -14,6 +14,9 @@ class Settings:
     questions_excel_path: Path
     cases_root: Path
     dicom_web_viewer_root: Path
+    admin_password: str
+    session_secret: str
+    frontend_origin: str
 
     def user_dir(self, user_group: str, user_id: str) -> Path:
         return self.data_dir / "users" / user_group / f"user_{user_id}"
@@ -55,4 +58,7 @@ settings = Settings(
         os.getenv("DICOM_WEB_VIEWER_ROOT"),
         Path("/media/nico/Extreme SSD/USZ/data_freeMax/web-viewer"),
     ),
+    admin_password=os.getenv("ADMIN_PASSWORD", "freeMax"),
+    session_secret=os.getenv("SESSION_SECRET", "change-this-session-secret"),
+    frontend_origin=os.getenv("FRONTEND_ORIGIN", "http://localhost:5173"),
 )

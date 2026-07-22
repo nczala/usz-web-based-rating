@@ -13,6 +13,9 @@ CASES_EXCEL_PATH=./data/all_cases.xlsx
 USERS_EXCEL_PATH=./data/users/users.xlsx
 QUESTIONS_EXCEL_PATH=./data/rating_questions/questions.xlsx
 CASES_ROOT=./data/cases
+ADMIN_PASSWORD=freeMax
+SESSION_SECRET=replace-this-with-a-random-secret
+FRONTEND_ORIGIN=http://localhost:5173
 ```
 
 Make sure to have ```backend``` as working directory & then run in terminal:

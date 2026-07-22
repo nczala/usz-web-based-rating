@@ -44,6 +44,13 @@ body,
         0 24px 40px rgba(0, 0, 0, 0.22);
 }
 
+.landing-header-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+}
+
 .landing-header h1 {
     margin: 0;
     font-size: clamp(2.2rem, 4vw, 4rem);
@@ -63,6 +70,13 @@ body,
     border-radius: 18px;
     background: rgba(13, 17, 21, 0.92);
     color: #d4dde4;
+}
+
+.landing-state-card-action {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
 }
 
 .landing-state-card h2,
@@ -143,6 +157,16 @@ body,
 .landing-form-actions {
     display: flex;
     justify-content: flex-start;
+}
+
+.landing-inline-form {
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+}
+
+.landing-inline-form .landing-field {
+    flex: 1;
 }
 
 .create-user-button {
@@ -275,6 +299,21 @@ body,
 @media (max-width: 720px) {
     .landing-form-row {
         grid-template-columns: 1fr;
+    }
+
+    .landing-state-card-action {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .landing-header-action {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .landing-inline-form {
+        flex-direction: column;
+        align-items: stretch;
     }
 }
 

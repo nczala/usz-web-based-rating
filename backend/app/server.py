@@ -1,25 +1,115 @@
 from pathlib import Path
+import base64
+import hashlib
+import hmac
+import secrets
 import re
 import shutil
 import numpy as np
 import pandas as pd
 import pydicom
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from app.config import settings
 
 MAX_PERCENTILE_SAMPLES_PER_SLICE = 50000
+ADMIN_COOKIE_NAME = "admin_session"
+ADMIN_SESSION_HEADER = "x-admin-session"
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        settings.frontend_origin,
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def create_admin_cookie_value(session_token: str) -> str:
+    payload = session_token.encode("utf-8")
+    signature = hmac.new(
+        settings.session_secret.encode("utf-8"),
+        payload,
+        hashlib.sha256,
+    ).digest()
+    return base64.urlsafe_b64encode(payload + b"." + signature).decode("ascii")
+
+
+def get_admin_session_token(cookie_value: str | None) -> str | None:
+    if not cookie_value:
+        return None
+
+    try:
+        decoded = base64.urlsafe_b64decode(cookie_value.encode("ascii"))
+        payload, signature = decoded.split(b".", 1)
+    except (ValueError, OSError):
+        return None
+
+    expected_signature = hmac.new(
+        settings.session_secret.encode("utf-8"),
+        payload,
+        hashlib.sha256,
+    ).digest()
+
+    if not hmac.compare_digest(signature, expected_signature):
+        return None
+
+    try:
+        return payload.decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+def require_admin_session(request: Request):
+    session_token = get_admin_session_token(request.cookies.get(ADMIN_COOKIE_NAME))
+    session_header = request.headers.get(ADMIN_SESSION_HEADER)
+
+    if not session_token or session_header != session_token:
+        raise HTTPException(status_code=401, detail="Admin authentication required")
+
+
+@app.get("/admin/session")
+def get_admin_session(request: Request):
+    session_token = get_admin_session_token(request.cookies.get(ADMIN_COOKIE_NAME))
+    session_header = request.headers.get(ADMIN_SESSION_HEADER)
+    is_authenticated = bool(session_token) and session_header == session_token
+    return {"authenticated": is_authenticated}
+
+
+@app.post("/admin/session")
+def create_admin_session(response: Response, payload: dict = Body(...)):
+    password = str(payload.get("password") or "")
+
+    if password != settings.admin_password:
+        raise HTTPException(status_code=401, detail="Incorrect password")
+
+    session_token = secrets.token_urlsafe(32)
+    response.set_cookie(
+        key=ADMIN_COOKIE_NAME,
+        value=create_admin_cookie_value(session_token),
+        httponly=True,
+        samesite="lax",
+        secure=False,
+    )
+    return {"authenticated": True, "sessionToken": session_token}
+
+
+@app.delete("/admin/session")
+def delete_admin_session(response: Response):
+    response.delete_cookie(
+        key=ADMIN_COOKIE_NAME,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+    )
+    return {"authenticated": False}
 
 def dicom_float_list(value):
     return [float(x) for x in value]
@@ -575,18 +665,21 @@ def get_user_state(user_id: str):
 
 
 @app.get("/users")
-def list_users():
+def list_users(request: Request):
+    require_admin_session(request)
     users = serialize_users(load_users_dataframe())
     return users
 
 
 @app.get("/user-groups")
-def list_user_groups():
+def list_user_groups(request: Request):
+    require_admin_session(request)
     return load_question_groups()
 
 
 @app.post("/users")
-def create_user(payload: dict = Body(...)):
+def create_user(request: Request, payload: dict = Body(...)):
+    require_admin_session(request)
     return create_user_record(
         name=payload.get("name"),
         group=payload.get("group"),
@@ -594,7 +687,8 @@ def create_user(payload: dict = Body(...)):
 
 
 @app.delete("/users/{user_id}")
-def delete_user(user_id: str):
+def delete_user(user_id: str, request: Request):
+    require_admin_session(request)
     delete_user_record(user_id)
     return {"deleted": True, "user_id": str(user_id).strip()}
 

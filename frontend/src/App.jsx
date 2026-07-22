@@ -6,6 +6,7 @@ import { SequenceViewportPanel } from "./components/SequenceViewportPanel";
 import { useDualSequenceViewer } from "./hooks/useDualSequenceViewer";
 
 import "./App.css";
+import { getAdminSession, loginAdmin, logoutAdmin } from "./api/admin.js";
 import { getRating, saveRating } from "./api/ratings.js";
 import {
     createUser,
@@ -250,6 +251,10 @@ function getRouteState(pathname) {
         return { type: "home" };
     }
 
+    if (segments.length === 1 && segments[0] === "admin") {
+        return { type: "admin" };
+    }
+
     return {
         type: "user",
         username: decodeURIComponent(segments[0]),
@@ -281,7 +286,165 @@ function useRouteState() {
     return routeState;
 }
 
-function UserPicker() {
+function PublicHome() {
+    return (
+        <div className="app landing-app">
+            <section className="landing-shell">
+                <div className="landing-header">
+                    <p className="eyebrow">Reader Session</p>
+                    <h1>Session Access</h1>
+                    <p className="landing-copy">
+                        Open your assigned reader URL directly to continue your rating
+                        session.
+                    </p>
+                </div>
+
+                <div className="landing-state-card landing-state-card-action">
+                    <div>
+                        <h2>Admin access</h2>
+                        <p>
+                            User management is available at <code>/admin</code> and requires a
+                            password.
+                        </p>
+                    </div>
+                    <div className="landing-form-actions">
+                        <button
+                            className="create-user-button"
+                            type="button"
+                            onClick={() => navigateTo("/admin")}
+                        >
+                            Open admin
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    );
+}
+
+function AdminRoute() {
+    const [password, setPassword] = useState("");
+    const [error, setError] = useState(null);
+    const [isUnlocked, setIsUnlocked] = useState(false);
+    const [isCheckingSession, setIsCheckingSession] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        let isCancelled = false;
+
+        async function loadAdminSession() {
+            try {
+                setIsCheckingSession(true);
+                const session = await getAdminSession();
+
+                if (!isCancelled) {
+                    setIsUnlocked(session?.authenticated === true);
+                }
+            } catch (sessionError) {
+                if (!isCancelled) {
+                    setError(sessionError.message);
+                    setIsUnlocked(false);
+                }
+            } finally {
+                if (!isCancelled) {
+                    setIsCheckingSession(false);
+                }
+            }
+        }
+
+        loadAdminSession();
+
+        return () => {
+            isCancelled = true;
+        };
+    }, []);
+
+    async function handleSubmit(event) {
+        event.preventDefault();
+
+        try {
+            setIsSubmitting(true);
+            setError(null);
+            await loginAdmin(password);
+            setPassword("");
+            setIsUnlocked(true);
+        } catch (submitError) {
+            setError(submitError.message);
+        } finally {
+            setIsSubmitting(false);
+        }
+    }
+
+    if (isUnlocked) {
+        return <UserPicker onLogout={async () => {
+            await logoutAdmin();
+            setIsUnlocked(false);
+        }} />;
+    }
+
+    if (isCheckingSession) {
+        return (
+            <div className="app landing-app">
+                <section className="landing-shell">
+                    <div className="landing-state-card">
+                        <h2>Checking admin session</h2>
+                        <p>Verifying your backend login state.</p>
+                    </div>
+                </section>
+            </div>
+        );
+    }
+
+    return (
+        <div className="app landing-app">
+            <section className="landing-shell">
+                <div className="landing-header">
+                    <p className="eyebrow">Admin</p>
+                    <h1>Protected Access</h1>
+                    <p className="landing-copy">
+                        Enter the admin password to manage users and open reader sessions.
+                    </p>
+                </div>
+
+                <form className="landing-create-card" onSubmit={handleSubmit}>
+                    <div className="landing-inline-form">
+                        <label className="landing-field">
+                            <span>Password</span>
+                            <input
+                                type="password"
+                                value={password}
+                                onChange={(event) => {
+                                    setPassword(event.target.value);
+                                    if (error) {
+                                        setError(null);
+                                    }
+                                }}
+                                placeholder="Enter password"
+                                autoComplete="current-password"
+                            />
+                        </label>
+                        <button
+                            className="create-user-button"
+                            type="submit"
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? "Unlocking..." : "Unlock admin"}
+                        </button>
+                    </div>
+
+                    {error ? (
+                        <div className="landing-state-card landing-state-card-error">
+                            <h2>Access denied</h2>
+                            <p>{error}</p>
+                        </div>
+                    ) : null}
+                </form>
+            </section>
+        </div>
+    );
+}
+
+function UserPicker({ onLogout = null }) {
     const [users, setUsers] = useState([]);
     const [availableGroups, setAvailableGroups] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -425,12 +588,25 @@ function UserPicker() {
     return (
         <div className="app landing-app">
             <section className="landing-shell">
-                <div className="landing-header">
-                    <p className="eyebrow">Reader Session</p>
-                    <h1>Select User</h1>
-                    <p className="landing-copy">
-                        Choose your username to open the rating session at its own URL.
-                    </p>
+                <div className="landing-header landing-header-action">
+                    <div>
+                        <p className="eyebrow">Reader Session</p>
+                        <h1>Select User</h1>
+                        <p className="landing-copy">
+                            Choose your username to open the rating session at its own URL.
+                        </p>
+                    </div>
+                    {onLogout ? (
+                        <div className="landing-form-actions">
+                            <button
+                                className="create-user-button"
+                                type="button"
+                                onClick={onLogout}
+                            >
+                                Log out
+                            </button>
+                        </div>
+                    ) : null}
                 </div>
 
                 <form className="landing-create-card" onSubmit={handleCreateUser}>
@@ -626,8 +802,12 @@ function UserRoute({ username }) {
                         <h2>Could not resolve user</h2>
                         <p>{loadError ?? `Unknown user route: /${username}`}</p>
                     </div>
-                    <button className="landing-back-link" type="button" onClick={() => navigateTo("/")}>
-                        Back to user selection
+                    <button
+                        className="landing-back-link"
+                        type="button"
+                        onClick={() => navigateTo("/admin")}
+                    >
+                        Back to admin
                     </button>
                 </section>
             </div>
@@ -863,20 +1043,20 @@ function ViewerApp({ resolvedUser }) {
                     <h1>DICOM VIEWER</h1>
                 </div>
                 <div className="header-actions">
-                    <div className="session-chip">{resolvedUser.name}</div>
-                    <div className="session-chip">{userState?.user_group ?? "Loading..."}</div>
-                    <div className="session-chip">User {userId}</div>
-                    <button
-                        className="hospital-logo"
-                        type="button"
-                        onClick={() => navigateTo("/")}
-                        aria-label="Back to user selection"
-                        title="Back to user selection"
-                    >
-                        <img className="hospital-logo-image" src={uszLogo} alt="USZ" />
-                    </button>
+                        <div className="session-chip">{resolvedUser.name}</div>
+                        <div className="session-chip">{userState?.user_group ?? "Loading..."}</div>
+                        <div className="session-chip">User {userId}</div>
+                        <button
+                            className="hospital-logo"
+                            type="button"
+                            onClick={() => navigateTo("/admin")}
+                            aria-label="Back to admin"
+                            title="Back to admin"
+                        >
+                            <img className="hospital-logo-image" src={uszLogo} alt="USZ" />
+                        </button>
+                    </div>
                 </div>
-            </div>
 
             <div className="app-layout">
                 <section className="main-panel">
@@ -1068,7 +1248,11 @@ export default function App() {
     const routeState = useRouteState();
 
     if (routeState.type === "home") {
-        return <UserPicker />;
+        return <PublicHome />;
+    }
+
+    if (routeState.type === "admin") {
+        return <AdminRoute />;
     }
 
     return <UserRoute username={routeState.username} />;
